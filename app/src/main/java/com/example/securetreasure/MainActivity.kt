@@ -1,26 +1,72 @@
 package com.example.securetreasure
 
+import android.Manifest
+import android.app.KeyguardManager
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.background
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 
+
 class MainActivity : ComponentActivity() {
+    private lateinit var authLauncher: ActivityResultLauncher<Intent>
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize repository before any ViewModel or UI that may access it
+        try {
+            ClueRepository.initialize(applicationContext)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // Register the Activity Result launcher for the confirm-device-credential intent
+        authLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                showAppUI()
+            } else {
+                finish()
+            }
+        }
+
+        val keyguard = getSystemService(KEYGUARD_SERVICE) as? KeyguardManager
+        val isSecure = keyguard?.isKeyguardSecure == true
+
+        if (isSecure) {
+            val credIntent: Intent? = keyguard.createConfirmDeviceCredentialIntent(
+                "Unlock Secure Treasure",
+                "Confirm device credential to access clues"
+            )
+            if (credIntent != null) {
+                authLauncher.launch(credIntent)
+            } else {
+                // fallback: show UI directly
+                showAppUI()
+            }
+        } else {
+            // Device has no secure lock screen; proceed but warn in logs
+            showAppUI()
+        }
+    }
+
+    private fun showAppUI() {
         setContent {
             SecureTreasureApp()
         }
@@ -45,8 +91,8 @@ fun SecureTreasureApp(vm: ClueViewModel = viewModel()) {
             when (screen) {
                 "list" -> ClueListScreen(clues = clues, vm = vm)
                 "create" -> CreateClueScreen(
-                    onCreate = { title, plain, pass ->
-                        vm.createClue(title, plain, pass)
+                    onCreate = { title, plain, pass, lat, lon, radius ->
+                        vm.createClue(title, plain, pass, lat, lon, radius)
                         screen = "list"
                     },
                     onCancel = { screen = "list" }
@@ -96,10 +142,36 @@ fun ClueListScreen(clues: List<Clue>, vm: ClueViewModel) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CreateClueScreen(onCreate: (String, String, String) -> Unit, onCancel: () -> Unit) {
+fun CreateClueScreen(onCreate: (String, String, String, Double?, Double?, Float?) -> Unit, onCancel: () -> Unit) {
+    val context = LocalContext.current
     var title by remember { mutableStateOf("") }
     var plain by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
+
+    var attachLocation by remember { mutableStateOf(false) }
+    var radiusStr by remember { mutableStateOf("50") }
+    var statusMsg by remember { mutableStateOf<String?>(null) }
+    var attachedLat by remember { mutableStateOf<Double?>(null) }
+    var attachedLon by remember { mutableStateOf<Double?>(null) }
+
+    // Permission launcher for ACCESS_FINE_LOCATION
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            val loc = LocationUtils.getLastKnownLocation(context)
+            if (loc != null) {
+                attachedLat = loc.latitude
+                attachedLon = loc.longitude
+                statusMsg = "Location attached (lat=${loc.latitude}, lon=${loc.longitude})"
+                attachLocation = true
+            } else {
+                statusMsg = "Couldn't obtain location. Try again later."
+                attachLocation = false
+            }
+        } else {
+            statusMsg = "Location permission denied"
+            attachLocation = false
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
         Text("Create Clue", style = MaterialTheme.typography.titleLarge)
@@ -115,85 +187,134 @@ fun CreateClueScreen(onCreate: (String, String, String) -> Unit, onCancel: () ->
             label = { Text("Passphrase (for AES)") },
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth())
+
         Spacer(Modifier.height(12.dp))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Attach current location")
+            Spacer(Modifier.width(8.dp))
+            Switch(checked = attachLocation, onCheckedChange = { checked ->
+                if (checked) {
+                    // Request permission and try to attach
+                    val permission = Manifest.permission.ACCESS_FINE_LOCATION
+                    val granted = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+                    if (granted) {
+                        val loc = LocationUtils.getLastKnownLocation(context)
+                        if (loc != null) {
+                            attachedLat = loc.latitude
+                            attachedLon = loc.longitude
+                            statusMsg = "Location attached (lat=${loc.latitude}, lon=${loc.longitude})"
+                        } else {
+                            statusMsg = "Couldn't obtain location. Try again later."
+                        }
+                    } else {
+                        // Request the permission
+                        permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                    }
+                } else {
+                    // Detach location
+                    attachedLat = null
+                    attachedLon = null
+                    statusMsg = "Location detached"
+                }
+                attachLocation = checked
+            })
+        }
+
+        if (attachLocation) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Latitude: ${attachedLat?.let { "%.4f".format(it) } ?: "N/A"}")
+                Text("Longitude: ${attachedLon?.let { "%.4f".format(it) } ?: "N/A"}")
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        OutlinedTextField(value = radiusStr, onValueChange = { radiusStr = it },
+            label = { Text("Radius (meters, optional)") }, modifier = Modifier.fillMaxWidth())
+        Spacer(Modifier.height(8.dp))
+
+        // Show status messages
+        statusMsg?.let { msg ->
+            Text(msg, color = if (msg.startsWith("Couldn't")) Color.Red else Color.Green)
+        }
+
+        Spacer(Modifier.height(12.dp))
+
         Row {
             Button(onClick = {
-                if (title.isNotBlank() && plain.isNotBlank() && pass.isNotBlank())
-                    onCreate(title, plain, pass)
-            }) { Text("Create & Encrypt") }
+                val radius = radiusStr.toFloatOrNull()
+                onCreate(title, plain, pass, attachedLat, attachedLon, radius)
+            }, modifier = Modifier.weight(1f)) {
+                Text("Create Clue")
+            }
             Spacer(Modifier.width(8.dp))
-            OutlinedButton(onClick = onCancel) { Text("Cancel") }
+            Button(onClick = onCancel, modifier = Modifier.weight(1f)) {
+                Text("Cancel")
+            }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class) // Add this if you use ExperimentalMaterial3Api components like OutlinedTextField
 @Composable
 fun UnlockDialog(clue: Clue, vm: ClueViewModel, onDismiss: () -> Unit) {
-    var pass by remember { mutableStateOf("") }
-    var showSuccess by remember { mutableStateOf(false) }
-    var unlockedText by remember { mutableStateOf("") }
-    var errorText by remember { mutableStateOf<String?>(null) }
-
-    if (showSuccess) {
-        UnlockSuccessScreen(unlockedText)
-        return
-    }
+    var passwordInput by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var decryptedContent by remember { mutableStateOf<String?>(null) } // To hold decrypted text
+    val context = LocalContext.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Unlock: ${clue.title}") },
+        title = { Text("Unlock Clue: ${clue.title}") },
         text = {
             Column {
                 OutlinedTextField(
-                    value = pass,
-                    onValueChange = { pass = it },
-                    label = { Text("Passphrase") },
-                    visualTransformation = PasswordVisualTransformation()
+                    value = passwordInput,
+                    onValueChange = { passwordInput = it },
+                    label = { Text("Enter Passphrase") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
                 )
-                errorText?.let { Text(it, color = Color.Red) }
+                Spacer(Modifier.height(8.dp))
+                // Display encrypted clue snippet for context
+                Text("Encrypted: ${clue.encryptedPayload.take(32)}...")
+
+                errorMessage?.let { msg ->
+                    Text(msg, color = Color.Red, style = MaterialTheme.typography.bodySmall)
+                }
+                decryptedContent?.let { content ->
+                    Spacer(Modifier.height(8.dp))
+                    Text("Decrypted Clue:", style = MaterialTheme.typography.titleSmall)
+                    Text(content, style = MaterialTheme.typography.bodyLarge)
+                }
             }
         },
         confirmButton = {
             Button(onClick = {
-                val (plain, err) = vm.tryUnlock(clue, pass)
-                if (plain != null) {
-                    unlockedText = plain
-                    showSuccess = true
+                errorMessage = null // Clear previous errors
+                decryptedContent = null // Clear previous decrypted content
+
+                if (passwordInput.isBlank()) {
+                    errorMessage = "Passphrase cannot be empty."
                 } else {
-                    errorText = err ?: "Incorrect passphrase"
+                    val location = LocationUtils.getLastKnownLocation(context)
+                    val decrypted = vm.attemptUnlock(clue, passwordInput, location)
+                    if (decrypted != null) {
+                        errorMessage = null // Clear error on successful unlock
+                        decryptedContent = decrypted
+                    } else {
+                        errorMessage = "Incorrect passphrase or location requirements not met."
+                    }
                 }
-            }) { Text("Unlock") }
+            }) {
+                Text(if (decryptedContent == null) "Unlock" else "Re-verify")
+            }
         },
         dismissButton = {
-            OutlinedButton(onClick = onDismiss) { Text("Close") }
-        }
-    )
-}
-
-@Composable
-fun UnlockSuccessScreen(text: String) {
-    val infinite = rememberInfiniteTransition()
-    val scale by infinite.animateFloat(
-        initialValue = 0.9f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        )
-    )
-
-    Box(
-        modifier = Modifier.fillMaxSize().background(Color(0xFFEDF7ED)),
-        contentAlignment = Alignment.Center
-    ) {
-        Card(modifier = Modifier.scale(scale).padding(16.dp),
-            elevation = CardDefaults.cardElevation(8.dp)) {
-            Column(modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("🎉 Clue Unlocked!", style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.height(12.dp))
-                Text(text, fontSize = 18.sp)
+            TextButton(onClick = onDismiss) {
+                Text("Close")
             }
         }
-    }
+    )
 }

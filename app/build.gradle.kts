@@ -75,4 +75,6 @@ dependencies {
 
     // Encryption helper (Javax)
     implementation("org.bouncycastle:bcprov-jdk15to18:1.77")
+
+    // JSON serialization
 }
