@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -75,4 +76,25 @@ dependencies {
 
     // Encryption helper (Javax)
     implementation("org.bouncycastle:bcprov-jdk15to18:1.77")
+    implementation(platform("com.google.firebase:firebase-bom:34.5.0"))
+    implementation("com.google.firebase:firebase-analytics")
+
+    // In app/build.gradle.kts
+
+
+        // ... (your other libraries like core-ktx, compose, etc.)
+
+        // Encryption helper (Javax)
+        implementation("org.bouncycastle:bcprov-jdk15to18:1.77")
+
+        // --- ADD THESE LINES FOR FIREBASE ---
+        // Add the Firebase Bill of Materials (BoM)
+        implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
+
+        // Add the dependencies for the services you need
+        implementation("com.google.firebase:firebase-firestore-ktx")     // For Firestore Database
+        implementation("com.google.firebase:firebase-messaging-ktx")   // For Push Notifications
+        implementation("com.google.firebase:firebase-functions-ktx")   // For Cloud Functions
+        // ------------------------------------
+
 }

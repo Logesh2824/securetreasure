@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "352131305584",
+    "project_id": "treasure-b5aab",
+    "storage_bucket": "treasure-b5aab.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:352131305584:android:30562fbce4520e02b7e4b5",
+        "android_client_info": {
+          "package_name": "com.example.securetreasure"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDUE7nEVVu3HlQA3xfmctPc8VqtQsTvjfk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
