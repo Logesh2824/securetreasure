@@ -13,7 +13,7 @@ class HintTimerService(private val context: Context) {
     val timeElapsed: StateFlow<Long> = _timeElapsed
 
     companion object {
-        const val HINT_DELAY_MILLIS = 15 * 60 * 1000L // 15 minutes
+        const val HINT_DELAY_MILLIS = 1 * 60 * 1000L // 15 minutes
     }
 
     fun startTimer(hintText: String, notificationService: NotificationService) {

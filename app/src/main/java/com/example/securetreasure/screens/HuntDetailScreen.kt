@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.securetreasure.viewmodels.HuntViewModel
+import androidx.compose.ui.graphics.graphicsLayer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -209,11 +210,15 @@ fun AnimatedStartButton(onClick: () -> Unit) {
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp),
+            .height(56.dp)
+            .graphicsLayer { // <-- Add these lines
+                scaleX = scale
+                scaleY = scale
+            },
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.primary
         )
-    ) {
+    )  {
         Text(
             text = "🚀 Start Adventure",
             style = MaterialTheme.typography.titleMedium,

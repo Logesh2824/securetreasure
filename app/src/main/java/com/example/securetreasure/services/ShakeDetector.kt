@@ -22,7 +22,7 @@ class ShakeDetector(context: Context) : SensorEventListener {
     private var lastY = 0f
     private var lastZ = 0f
 
-    private val shakeThreshold = 800 // Acceleration threshold for shake
+    private val shakeThreshold = 200 // Acceleration threshold for shake
     private val updateInterval = 100L // Minimum time between shake detections (ms)
 
     init {

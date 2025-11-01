@@ -20,6 +20,9 @@ import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.util.Size
 
 @Composable
 fun QRScannerScreen(
@@ -30,20 +33,62 @@ fun QRScannerScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     var hasScanned by remember { mutableStateOf(false) }
 
+    // --- START: ADD PERMISSION LOGIC ---
+
+    // State to track if we have permission
+    var hasPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    // Permission launcher
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted ->
+            hasPermission = isGranted
+        }
+    )
+
+    // Request permission if we don't have it
+    LaunchedEffect(Unit) {
+        if (!hasPermission) {
+            permissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    // --- END: ADD PERMISSION LOGIC ---
+
     Box(modifier = Modifier.fillMaxSize()) {
-        AndroidView(
-            factory = { ctx ->
-                PreviewView(ctx).apply {
-                    setupCamera(ctx, this, lifecycleOwner) { qrContent ->
-                        if (!hasScanned) {
-                            hasScanned = true
-                            onQRCodeScanned(qrContent)
+        // --- START: MODIFY THIS PART ---
+        if (hasPermission) {
+            // Only show the camera preview if we have permission
+            AndroidView(
+                factory = { ctx ->
+                    PreviewView(ctx).apply {
+                        setupCamera(ctx, this, lifecycleOwner) { qrContent ->
+                            if (!hasScanned) {
+                                hasScanned = true
+                                onQRCodeScanned(qrContent)
+                            }
                         }
                     }
-                }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            // Show a message while requesting permission
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Requesting camera permission...")
+            }
+        }
+        // --- END: MODIFY THIS PART ---
 
         // Overlay UI
         Column(
@@ -94,6 +139,9 @@ private fun setupCamera(
 
         val imageAnalyzer = ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            // Add these two lines
+            .setTargetResolution(Size(640, 480)) // Analyze a smaller image
+            .setTargetRotation(previewView.display.rotation) // Align rotation
             .build()
             .also {
                 it.setAnalyzer(executor) { imageProxy ->

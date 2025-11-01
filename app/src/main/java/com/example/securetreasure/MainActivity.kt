@@ -16,6 +16,7 @@ import com.example.securetreasure.services.NotificationService
 import com.example.securetreasure.services.ShakeDetector
 import com.example.securetreasure.services.HintTimerService
 import com.google.firebase.FirebaseApp
+import android.util.Log
 
 class MainActivity : ComponentActivity() {
     private lateinit var locationService: LocationService
@@ -44,6 +45,18 @@ class MainActivity : ComponentActivity() {
 
         // Initialize Firebase
         FirebaseApp.initializeApp(this)
+        // --- TEMPORARY CODE TO GENERATE CLUE DATA ---
+        val qrContent = "ClockTowerQR"
+        val secretClue = "The next clue is hidden by the bronze statue in the main park."
+
+        val hash = CryptoUtils.sha256Hex(qrContent)
+        val payload = CryptoUtils.encrypt(secretClue, qrContent)
+
+        Log.d("ClueGenerator", "--- CLUE 1 DATA ---")
+        Log.d("ClueGenerator", "qrCodeContentHash: $hash")
+        Log.d("ClueGenerator", "encryptedCluePayload: $payload")
+        Log.d("ClueGenerator", "---------------------")
+// --- END OF TEMPORARY CODE ---
 
         // Initialize services
         locationService = LocationService(this)
