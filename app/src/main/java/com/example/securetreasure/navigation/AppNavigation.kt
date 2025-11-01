@@ -6,6 +6,7 @@ import com.example.securetreasure.screens.*
 import com.example.securetreasure.services.LocationService
 import com.example.securetreasure.services.NotificationService
 import com.example.securetreasure.services.ShakeDetector
+import com.example.securetreasure.services.HintTimerService
 import com.example.securetreasure.viewmodels.HuntViewModel
 
 sealed class Screen {
@@ -18,7 +19,8 @@ sealed class Screen {
 fun AppNavigation(
     locationService: LocationService,
     notificationService: NotificationService,
-    shakeDetector: ShakeDetector
+    shakeDetector: ShakeDetector,
+    hintTimerService: HintTimerService
 ) {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.HuntList) }
     val huntViewModel: HuntViewModel = viewModel()
@@ -52,6 +54,7 @@ fun AppNavigation(
                 locationService = locationService,
                 notificationService = notificationService,
                 shakeDetector = shakeDetector,
+                hintTimerService = hintTimerService,
                 onNextClue = { huntId, nextClueNumber ->
                     currentScreen = Screen.ActiveHunt(huntId, nextClueNumber)
                 },

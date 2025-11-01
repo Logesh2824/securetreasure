@@ -2,6 +2,7 @@ package com.example.securetreasure
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -13,18 +14,28 @@ import com.example.securetreasure.navigation.AppNavigation
 import com.example.securetreasure.services.LocationService
 import com.example.securetreasure.services.NotificationService
 import com.example.securetreasure.services.ShakeDetector
+import com.example.securetreasure.services.HintTimerService
 import com.google.firebase.FirebaseApp
 
 class MainActivity : ComponentActivity() {
     private lateinit var locationService: LocationService
     private lateinit var notificationService: NotificationService
     private lateinit var shakeDetector: ShakeDetector
+    private lateinit var hintTimerService: HintTimerService
 
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
             locationService.startLocationUpdates()
+        }
+    }
+
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            // Permission granted
         }
     }
 
@@ -38,9 +49,11 @@ class MainActivity : ComponentActivity() {
         locationService = LocationService(this)
         notificationService = NotificationService(this)
         shakeDetector = ShakeDetector(this)
+        hintTimerService = HintTimerService(this)
 
         // Request permissions
         requestLocationPermissions()
+        requestNotificationPermission()
         notificationService.createNotificationChannel()
 
         setContent {
@@ -48,7 +61,8 @@ class MainActivity : ComponentActivity() {
                 AppNavigation(
                     locationService = locationService,
                     notificationService = notificationService,
-                    shakeDetector = shakeDetector
+                    shakeDetector = shakeDetector,
+                    hintTimerService = hintTimerService
                 )
             }
         }
@@ -73,9 +87,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            when {
+                ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED -> {
+                    // Permission already granted
+                }
+                else -> {
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         locationService.stopLocationUpdates()
         shakeDetector.stop()
+        hintTimerService.cleanup()
     }
 }

@@ -45,8 +45,11 @@ android {
 
 }
 
+// In app/build.gradle.kts
+
 dependencies {
     // Core
+
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
@@ -76,25 +79,30 @@ dependencies {
 
     // Encryption helper (Javax)
     implementation("org.bouncycastle:bcprov-jdk15to18:1.77")
-    implementation(platform("com.google.firebase:firebase-bom:34.5.0"))
+
+    // Firebase (Using ONE Bill of Materials)
+    implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
     implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-firestore-ktx")
+    // Note: I have removed firebase-messaging-ktx as it's not in your file,
+    // but you DO need it for FCMService.kt. Please add:
+    // implementation("com.google.firebase:firebase-messaging-ktx")
 
-    // In app/build.gradle.kts
+    // Google Play Services (Location)
+    // FIXED: Removed incorrect 'platform()' wrapper
+    implementation("com.google.android.gms:play-services-location:21.1.0")
 
+    // CameraX
+    // FIXED: Changed 'def' to 'val' and "..." to ("...") for Kotlin
+    val camerax_version = "1.3.1"
+    implementation("androidx.camera:camera-core:$camerax_version")
+    implementation("androidx.camera:camera-camera2:$camerax_version")
+    implementation("androidx.camera:camera-lifecycle:$camerax_version")
+    implementation("androidx.camera:camera-view:$camerax_version")
 
-        // ... (your other libraries like core-ktx, compose, etc.)
+    // ML Kit Barcode Scanning
+    implementation("com.google.mlkit:barcode-scanning:17.2.0")
 
-        // Encryption helper (Javax)
-        implementation("org.bouncycastle:bcprov-jdk15to18:1.77")
-
-        // --- ADD THESE LINES FOR FIREBASE ---
-        // Add the Firebase Bill of Materials (BoM)
-        implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
-
-        // Add the dependencies for the services you need
-        implementation("com.google.firebase:firebase-firestore-ktx")     // For Firestore Database
-        implementation("com.google.firebase:firebase-messaging-ktx")   // For Push Notifications
-        implementation("com.google.firebase:firebase-functions-ktx")   // For Cloud Functions
-        // ------------------------------------
-
+    // Coroutines for Play Services
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 }

@@ -12,7 +12,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -23,9 +22,11 @@ import com.example.securetreasure.scanner.QRScannerScreen
 import com.example.securetreasure.services.LocationService
 import com.example.securetreasure.services.NotificationService
 import com.example.securetreasure.services.ShakeDetector
+import com.example.securetreasure.services.HintTimerService
 import com.example.securetreasure.viewmodels.HuntViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.ui.draw.alpha
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,6 +37,7 @@ fun ActiveHuntScreen(
     locationService: LocationService,
     notificationService: NotificationService,
     shakeDetector: ShakeDetector,
+    hintTimerService: HintTimerService,
     onNextClue: (String, Int) -> Unit,
     onHuntComplete: () -> Unit,
     onBack: () -> Unit
@@ -45,6 +47,7 @@ fun ActiveHuntScreen(
     val distanceToTarget by viewModel.distanceToTarget.collectAsState()
     val currentHunt by viewModel.currentHunt.collectAsState()
     val location by locationService.currentLocation.collectAsState()
+    val timeElapsed by hintTimerService.timeElapsed.collectAsState()
 
     var showHintDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -60,10 +63,34 @@ fun ActiveHuntScreen(
         location?.let { viewModel.updateLocation(it) }
     }
 
+    // Start timer when entering Navigating state
+    LaunchedEffect(huntState) {
+        when (huntState) {
+            is HuntState.Navigating -> {
+                currentClue?.let { clue ->
+                    hintTimerService.startTimer(clue.hintText, notificationService)
+                }
+            }
+            is HuntState.ReadyToScan, is HuntState.Scanning, is HuntState.Revealing -> {
+                hintTimerService.stopTimer()
+                notificationService.cancelHintNotification()
+            }
+            else -> {}
+        }
+    }
+
     // Listen for shake events
     LaunchedEffect(Unit) {
         shakeDetector.shakeEvent.collect {
             showHintDialog = true
+        }
+    }
+
+    // Cleanup on exit
+    DisposableEffect(Unit) {
+        onDispose {
+            hintTimerService.stopTimer()
+            notificationService.cancelHintNotification()
         }
     }
 
@@ -126,6 +153,7 @@ fun ActiveHuntScreen(
                             NavigatingView(
                                 clueTitle = currentClue?.title ?: "",
                                 distance = distanceToTarget,
+                                timeElapsed = timeElapsed,
                                 onShowHint = { showHintDialog = true }
                             )
                         }
@@ -169,7 +197,12 @@ fun ActiveHuntScreen(
 }
 
 @Composable
-fun NavigatingView(clueTitle: String, distance: Double?, onShowHint: () -> Unit) {
+fun NavigatingView(
+    clueTitle: String,
+    distance: Double?,
+    timeElapsed: Long,
+    onShowHint: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -202,6 +235,11 @@ fun NavigatingView(clueTitle: String, distance: Double?, onShowHint: () -> Unit)
 
         DistanceMeter(distance = distance)
 
+        Spacer(Modifier.height(16.dp))
+
+        // Timer display
+        TimerDisplay(timeElapsed = timeElapsed)
+
         Spacer(Modifier.height(32.dp))
 
         OutlinedButton(
@@ -209,6 +247,53 @@ fun NavigatingView(clueTitle: String, distance: Double?, onShowHint: () -> Unit)
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("💡 Show Hint (or shake phone)")
+        }
+    }
+}
+
+@Composable
+fun TimerDisplay(timeElapsed: Long) {
+    val minutes = (timeElapsed / 1000 / 60).toInt()
+    val seconds = ((timeElapsed / 1000) % 60).toInt()
+    val hintIn = 15 - minutes
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (hintIn <= 2) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            }
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Time on this clue",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                text = String.format("%02d:%02d", minutes, seconds),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            if (hintIn > 0) {
+                Text(
+                    text = "Hint in ${hintIn}m",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            } else {
+                Text(
+                    text = "✨ Hint notification sent!",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }

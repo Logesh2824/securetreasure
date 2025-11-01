@@ -8,7 +8,6 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.example.securetreasure.MainActivity
-import com.example.securetreasure.R
 
 class NotificationService(private val context: Context) {
     private val notificationManager =
@@ -29,6 +28,7 @@ class NotificationService(private val context: Context) {
             ).apply {
                 description = "Notifications for treasure hunt hints and updates"
                 enableVibration(true)
+                enableLights(true)
             }
             notificationManager.createNotificationChannel(channel)
         }
@@ -37,6 +37,7 @@ class NotificationService(private val context: Context) {
     fun sendHintNotification(hintText: String) {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("SHOW_HINT", true)
         }
 
         val pendingIntent = PendingIntent.getActivity(
@@ -54,6 +55,7 @@ class NotificationService(private val context: Context) {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
+            .setVibrate(longArrayOf(0, 500, 250, 500))
             .build()
 
         notificationManager.notify(HINT_NOTIFICATION_ID, notification)
